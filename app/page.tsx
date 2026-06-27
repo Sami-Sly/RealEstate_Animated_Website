@@ -6,6 +6,7 @@ import ScentSection from "@/components/ScentSection";
 import DetailsSection from "@/components/DetailsSection";
 import AcquireSection from "@/components/AcquireSection";
 import Footer from "@/components/Footer";
+// import DonutShowcase from "@/components/DonutsShowcase";
 
 export default function Home() {
   return (
@@ -18,6 +19,7 @@ export default function Home() {
       <DetailsSection />
       <AcquireSection />
       <Footer />
+            {/* <DonutShowcase /> */}
     </main>
   );
 }
