@@ -17,7 +17,7 @@ export default function SmoothScrolling({ children }: { children: React.ReactNod
         syncTouch: true, 
         
         // MOBILE BOOST: Multiplies a small thumb swipe into a massive, slow-motion glide
-        touchMultiplier: 1.5, 
+        touchMultiplier: 1.2, 
       }}
     >
       {children}
