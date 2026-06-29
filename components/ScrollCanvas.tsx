@@ -14,8 +14,8 @@ if (typeof window !== "undefined") {
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG 
 // ─────────────────────────────────────────────────────────────────────────────
-const FIRST_FRAME  = 1;
-const LAST_FRAME   = 300;
+const FIRST_FRAME = 1;
+const LAST_FRAME = 300;
 const TOTAL_FRAMES = LAST_FRAME - FIRST_FRAME + 1;
 
 function frameSrc(i: number) {
@@ -189,21 +189,13 @@ const SCOPED_CSS = `
   
   @media (max-width: 1024px) {
     .sc-beat { padding: 0 4vw; }
-    .sc-beat-inner { max-width: 320px; } /* Shrinks text container so it fits on tablet */
+    .sc-beat-inner { max-width: 320px; } 
   }
 
   @media (max-width: 768px) {
     .sc-beat { padding: 0 20px; }
-    
-    /* CRITICAL FIX: 
-       We constrain the max-width to 280px on phones. 
-       This prevents the text from stretching across the whole screen, 
-       ensuring "Left" actually looks left aligned, and "Right" actually looks right aligned! */
     .sc-beat-inner { max-width: 280px; } 
-    
-    /* Center alignment gets full width */
     .sc-beat[data-align="center"] .sc-beat-inner { max-width: 100%; } 
-    
     .sc-final-cta { bottom: 6%; transform: translateX(-50%) scale(0.95); }
   }
 `;
@@ -212,18 +204,18 @@ const SCOPED_CSS = `
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ScrollCanvas() {
-  const trackRef     = useRef<HTMLDivElement>(null);
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const imagesRef    = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
-  const loadedRef    = useRef<boolean[]>(new Array(TOTAL_FRAMES).fill(false));
-  const frameObjRef  = useRef({ f: 0 });
+  const trackRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
+  const loadedRef = useRef<boolean[]>(new Array(TOTAL_FRAMES).fill(false));
+  const frameObjRef = useRef({ f: 0 });
   const lastDrawnRef = useRef(-1);
-  const dprRef       = useRef(1); 
+  const dprRef = useRef(1);
   const contentShownRef = useRef(false);
 
-  const [loadPct, setLoadPct]       = useState(0);
+  const [loadPct, setLoadPct] = useState(0);
   const [showContent, setShowContent] = useState(false);
-  const [isVisible, setIsVisible]   = useState(false); 
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const id = "sc-css";
@@ -235,17 +227,17 @@ export default function ScrollCanvas() {
     return () => { document.getElementById(id)?.remove(); };
   }, []);
 
-  const NAV_H = 56; 
+  const NAV_H = 56;
   const resizeCanvas = useCallback(() => {
     const c = canvasRef.current;
     if (!c) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     dprRef.current = dpr;
     const W = window.innerWidth;
-    const H = window.innerHeight - NAV_H; 
-    c.width  = W * dpr;
+    const H = window.innerHeight - NAV_H;
+    c.width = W * dpr;
     c.height = H * dpr;
-    c.style.width  = `${W}px`;
+    c.style.width = `${W}px`;
     c.style.height = `${H}px`;
     const ctx = c.getContext("2d", { alpha: false });
     if (ctx) {
@@ -256,12 +248,12 @@ export default function ScrollCanvas() {
 
   const drawFrame = useCallback((idx: number) => {
     let i = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(idx)));
-    
+
     // Fallback to closest loaded frame if scrolling fast
     while (i >= 0 && !loadedRef.current[i]) {
       i--;
     }
-    
+
     if (i < 0 || i === lastDrawnRef.current) return;
 
     const img = imagesRef.current[i];
@@ -273,62 +265,94 @@ export default function ScrollCanvas() {
     if (!ctx) return;
 
     const dpr = dprRef.current;
-    const W = c.width  / dpr;
+    const W = c.width / dpr;
     const H = c.height / dpr;
     ctx.fillStyle = "#0B0906";
     ctx.fillRect(0, 0, W, H);
 
     const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-    const dw = img.naturalWidth  * scale;
+    const dw = img.naturalWidth * scale;
     const dh = img.naturalHeight * scale;
     const dx = (W - dw) / 2;
-    const dy = (H - dh) * 0.15;
+    const dy = (H - dh) / 2;
 
     ctx.drawImage(img, dx, dy, dw, dh);
     lastDrawnRef.current = i;
   }, []);
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // OPTIMIZED IMAGE PRELOADER
+  // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     let loaded = 0;
 
     const onFrameDone = (i: number) => {
       loaded++;
       setLoadPct(Math.min(100, Math.round((loaded / TOTAL_FRAMES) * 100)));
-      
-      if (i === 0) drawFrame(0); 
-      
-      // Load 2 frames before showing site
-      if (loaded >= 2 && !contentShownRef.current) {
+
+      if (i === 0) drawFrame(0);
+
+      // Changed from 2 to 10 to give the UI a sufficient buffer
+      // before allowing the user to start scrubbing.
+      if (loaded >= 10 && !contentShownRef.current) {
         contentShownRef.current = true;
         setShowContent(true);
-        setTimeout(() => setIsVisible(true), 50); 
+        setTimeout(() => setIsVisible(true), 50);
       }
     };
 
-    const loadFrame = (i: number) => {
+    // 1. Load the first 10 frames immediately 
+    const initialBatch = 10;
+    for (let i = 0; i < Math.min(initialBatch, TOTAL_FRAMES); i++) {
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        img.decode().catch(() => {}).finally(() => {
-            loadedRef.current[i] = true;
-            imagesRef.current[i] = img;
-            onFrameDone(i);
+        img.decode().catch(() => { }).finally(() => {
+          loadedRef.current[i] = true;
+          imagesRef.current[i] = img;
+          onFrameDone(i);
         });
       };
       img.onerror = () => onFrameDone(i);
       img.src = frameSrc(i);
+    }
+
+    // 2. Load the rest sequentially to prevent browser/network throttling
+    let nextFrameToLoad = initialBatch;
+
+    const loadNextSequence = () => {
+      if (nextFrameToLoad >= TOTAL_FRAMES) return;
+
+      const i = nextFrameToLoad;
+      nextFrameToLoad++;
+
+      const img = new Image();
+      img.decoding = "async";
+
+      const handleComplete = () => {
+        onFrameDone(i);
+        loadNextSequence(); // Fire next image request only when this one completes
+      };
+
+      img.onload = () => {
+        img.decode().catch(() => { }).finally(() => {
+          loadedRef.current[i] = true;
+          imagesRef.current[i] = img;
+          handleComplete();
+        });
+      };
+      img.onerror = handleComplete;
+      img.src = frameSrc(i);
     };
 
-    // Preload first 3
-    for (let i = 0; i < Math.min(3, TOTAL_FRAMES); i++) loadFrame(i);
-
-    // Background load the rest
+    // 3. Initiate 3 parallel streams to maximize connection without choking
     const ric = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 100));
     ric(() => {
-      for (let i = 3; i < TOTAL_FRAMES; i++) {
-        setTimeout(() => loadFrame(i), i * 15);
-      }
+      loadNextSequence();
+      loadNextSequence();
+      loadNextSequence();
     });
+
   }, [drawFrame]);
 
   useEffect(() => {
@@ -338,7 +362,6 @@ export default function ScrollCanvas() {
     let lastWidth = window.innerWidth;
 
     const onResize = () => {
-      // ONLY REFRESH ON WIDTH CHANGE (Fixes mobile scrollbar shrinking break)
       if (window.innerWidth !== lastWidth) {
         lastWidth = window.innerWidth;
         resizeCanvas();
@@ -376,24 +399,24 @@ export default function ScrollCanvas() {
       0,
     );
 
-    const CARD_ZONE   = 0.78;
-    const STEP        = CARD_ZONE / BEATS.length;
+    const CARD_ZONE = 0.78;
+    const STEP = CARD_ZONE / BEATS.length;
     const ENTRY_DELAY = STEP * 0.06;
-    const FADE_IN     = STEP * 0.36;
-    const FADE_OUT    = STEP * 0.30;
+    const FADE_IN = STEP * 0.36;
+    const FADE_OUT = STEP * 0.30;
 
     const cards = gsap.utils.toArray<HTMLElement>(".sc-beat");
 
     cards.forEach((card, i) => {
-      const zoneStart    = i * STEP;
-      const zoneEnd      = (i + 1) * STEP;
-      const fadeInStart  = zoneStart + ENTRY_DELAY;
+      const zoneStart = i * STEP;
+      const zoneEnd = (i + 1) * STEP;
+      const fadeInStart = zoneStart + ENTRY_DELAY;
       const fadeOutStart = zoneEnd - FADE_OUT;
 
-      const a   = BEATS[i].align;
+      const a = BEATS[i].align;
       const mob = window.innerWidth < 768;
-      const ox  = mob ? 0 : a === "left" ? -22 : a === "right" ? 22 : 0;
-      const oy  = a === "center" ? 14 : 0;
+      const ox = mob ? 0 : a === "left" ? -22 : a === "right" ? 22 : 0;
+      const oy = a === "center" ? 14 : 0;
 
       tl.fromTo(
         card,
@@ -450,7 +473,7 @@ export default function ScrollCanvas() {
                 data-align={beat.align}
               >
                 <div className="sc-beat-inner">
-                  
+
                   {beat.eyebrow && (
                     <div className="sc-pill-wrapper">
                       <span className="sc-pill">
@@ -505,15 +528,15 @@ export default function ScrollCanvas() {
                   )}
 
                   {beat.bullets && (
-                    <ul 
-                      className="sc-bullets-wrapper" 
-                      style={{ 
-                        listStyle: "none", 
-                        display: "flex", 
-                        flexDirection: "column", 
-                        gap: 10, 
-                        margin: 0, 
-                        padding: 0 
+                    <ul
+                      className="sc-bullets-wrapper"
+                      style={{
+                        listStyle: "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                        margin: 0,
+                        padding: 0
                       }}
                     >
                       {beat.bullets.map((b, bi) => (
@@ -579,6 +602,4 @@ export default function ScrollCanvas() {
     </>
   );
 }
-
-
 
