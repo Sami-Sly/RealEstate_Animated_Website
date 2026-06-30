@@ -18,7 +18,7 @@ export default function Footer() {
 
   return (
     <footer
-      className="border-t py-14 md:py-16"
+      className="border-t py-14  md:py-16"
       style={{
         background: "#080603",
         borderColor: "rgba(201,168,76,0.07)",

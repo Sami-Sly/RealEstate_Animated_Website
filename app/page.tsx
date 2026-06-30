@@ -10,7 +10,7 @@ import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main style={{ background: "#0B0906", minHeight: "100vh" }}>
+    <main >
       <ProgressBar />
       {/* Navbar manages its own scroll state internally — no props needed */}
       <Navbar />
