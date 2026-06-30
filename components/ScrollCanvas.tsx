@@ -87,76 +87,35 @@ export default function RealEstateHome() {
 
       imagesRef.current = images;
 
-      // const render = () => {
-      //   const canvasWidth = window.innerWidth;
-      //   const canvasHeight = window.innerHeight;
+      const render = () => {
+        const canvasWidth = window.innerWidth;
+        const canvasHeight = window.innerHeight;
 
-      //   context.clearRect(0, 0, canvasWidth, canvasHeight);
+        context.clearRect(0, 0, canvasWidth, canvasHeight);
 
-      //   const img = imagesRef.current[videoFramesRef.current.frame];
-      //   if (img && img.complete && img.naturalWidth > 0) {
-      //     const imageAspect = img.naturalWidth / img.naturalHeight;
-      //     const canvasAspect = canvasWidth / canvasHeight;
+        const img = imagesRef.current[videoFramesRef.current.frame];
+        if (img && img.complete && img.naturalWidth > 0) {
+          const imageAspect = img.naturalWidth / img.naturalHeight;
+          const canvasAspect = canvasWidth / canvasHeight;
 
-      //     let drawWidth, drawHeight, drawX, drawY;
+          let drawWidth, drawHeight, drawX, drawY;
 
-      //     if (imageAspect > canvasAspect) {
-      //       drawHeight = canvasHeight;
-      //       drawWidth = drawHeight * imageAspect;
-      //       drawX = (canvasWidth - drawWidth) / 2;
-      //       drawY = 0;
-      //     } else {
-      //       drawWidth = canvasWidth;
-      //       drawHeight = drawWidth / imageAspect;
-      //       drawX = 0;
-      //       drawY = (canvasHeight - drawHeight) / 2;
-      //     }
+          if (imageAspect > canvasAspect) {
+            drawHeight = canvasHeight;
+            drawWidth = drawHeight * imageAspect;
+            drawX = (canvasWidth - drawWidth) / 2;
+            drawY = 0;
+          } else {
+            drawWidth = canvasWidth;
+            drawHeight = drawWidth / imageAspect;
+            drawX = 0;
+            drawY = (canvasHeight - drawHeight) / 2;
+          }
 
-      //     context.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-      //   }
-      // };
+          context.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        }
+      };
 
-      const getFitMode = () => {
-  const w = window.innerWidth;
-  if (w < 640) return "contain";   // mobile: show the whole frame, no cropping
-  if (w < 1024) return "cover";    // tablet: fill, slight crop is fine
-  return "cover";                  // desktop: fill
-};
-
-const render = () => {
-  const canvasWidth = window.innerWidth;
-  const canvasHeight = window.innerHeight;
-
-  context.clearRect(0, 0, canvasWidth, canvasHeight);
-
-  const img = imagesRef.current[videoFramesRef.current.frame];
-  if (img && img.complete && img.naturalWidth > 0) {
-    const imageAspect = img.naturalWidth / img.naturalHeight;
-    const canvasAspect = canvasWidth / canvasHeight;
-    const fit = getFitMode();
-
-    let drawWidth, drawHeight, drawX, drawY;
-
-    // "contain" fits the whole image inside the canvas (may letterbox)
-    // "cover" fills the canvas (may crop) — this flips which axis drives sizing
-    const shouldMatchHeight =
-      fit === "cover" ? imageAspect > canvasAspect : imageAspect < canvasAspect;
-
-    if (shouldMatchHeight) {
-      drawHeight = canvasHeight;
-      drawWidth = drawHeight * imageAspect;
-      drawX = (canvasWidth - drawWidth) / 2;
-      drawY = 0;
-    } else {
-      drawWidth = canvasWidth;
-      drawHeight = drawWidth / imageAspect;
-      drawX = 0;
-      drawY = (canvasHeight - drawHeight) / 2;
-    }
-
-    context.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-  }
-};
       const setupScrollTrigger = () => {
         scrollTriggerInstance = ScrollTrigger.create({
           trigger: ".hero",
