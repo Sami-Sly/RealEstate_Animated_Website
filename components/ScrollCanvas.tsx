@@ -216,6 +216,7 @@
 
 
 
+
 "use client";
 
 import { useRef } from "react";
@@ -244,7 +245,6 @@ export default function ScrollCanvas() {
       const context = canvas.getContext("2d");
       if (!context) return;
 
-      // Initialize state for the text elements
       gsap.set([text1Ref.current, text2Ref.current, text3Ref.current], {
         xPercent: -50,
         yPercent: -50,
@@ -279,7 +279,6 @@ export default function ScrollCanvas() {
         }
       };
 
-      // Load images
       for (let i = 0; i < frameCount; i++) {
         const img = new Image();
         img.src = `/frames/ezgif-frame-${(i + 1).toString().padStart(3, "0")}.jpg`;
@@ -293,12 +292,18 @@ export default function ScrollCanvas() {
         images.push(img);
       }
 
-      // Scroll Animation
+      const handleResize = () => {
+        setCanvasSize();
+        render();
+      };
+      window.addEventListener("resize", handleResize);
+
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: ".hero",
           start: "top top",
-          end: `+=${window.innerHeight * 5}px`,
+          end: () => `+=${window.innerHeight * 5}`,
+          invalidateOnRefresh: true,
           pin: true,
           pinSpacing: true,
           scrub: 1,
@@ -317,7 +322,6 @@ export default function ScrollCanvas() {
         0
       );
 
-      // Text animations sequenced on the timeline
       tl.to(text1Ref.current, { opacity: 1, duration: 0.2 }, 0);
       tl.to(text1Ref.current, { opacity: 0, y: -50, duration: 0.2 }, 0.2);
 
@@ -336,12 +340,16 @@ export default function ScrollCanvas() {
         0.7
       );
       tl.to(text3Ref.current, { opacity: 0, y: -50, duration: 0.2 }, 0.9);
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+      };
     },
     { scope: containerRef }
   );
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} style={{ background: "#0B0906" }}>
       <section
         className="hero"
         style={{ position: "relative", width: "100%", height: "100vh" }}
@@ -365,19 +373,19 @@ export default function ScrollCanvas() {
         >
           <div
             ref={text1Ref}
-            style={{ position: "absolute", top: 0,  width: "100%" }}
+            style={{ position: "absolute", top: 0, width: "100%" }}
           >
             <h1 style={{ color: "#fff" }}>A New Standard in Living</h1>
           </div>
           <div
             ref={text2Ref}
-            style={{ position: "absolute", top: 0,  width: "100%" }}
+            style={{ position: "absolute", top: 0, width: "100%" }}
           >
             <h1 style={{ color: "#fff" }}>Discover Exceptional Properties</h1>
           </div>
           <div
             ref={text3Ref}
-            style={{ position: "absolute", top: 0,  width: "100%" }}
+            style={{ position: "absolute", top: 0, width: "100%" }}
           >
             <h1 style={{ color: "#fff" }}>Your Next Address Awaits</h1>
           </div>
@@ -386,3 +394,173 @@ export default function ScrollCanvas() {
     </div>
   );
 }
+// "use client";
+
+// import { useRef } from "react";
+// import { gsap } from "gsap";
+// import { ScrollTrigger } from "gsap/ScrollTrigger";
+// import { useGSAP } from "@gsap/react";
+
+// export default function ScrollCanvas() {
+//   const containerRef = useRef<HTMLDivElement>(null);
+//   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+//   const text1Ref = useRef<HTMLDivElement>(null);
+//   const text2Ref = useRef<HTMLDivElement>(null);
+//   const text3Ref = useRef<HTMLDivElement>(null);
+
+//   const videoFramesRef = useRef({ frame: 0 });
+
+//   if (typeof window !== "undefined") {
+//     gsap.registerPlugin(ScrollTrigger, useGSAP);
+//   }
+
+//   useGSAP(
+//     () => {
+//       const canvas = canvasRef.current;
+//       if (!canvas) return;
+
+//       const context = canvas.getContext("2d");
+//       if (!context) return;
+
+//       // Initialize state for the text elements
+//       gsap.set([text1Ref.current, text2Ref.current, text3Ref.current], {
+//         xPercent: -50,
+//         yPercent: -50,
+//         opacity: 0,
+//       });
+
+//       const setCanvasSize = () => {
+//         const pixelRatio = window.devicePixelRatio || 1;
+//         canvas.width = window.innerWidth * pixelRatio;
+//         canvas.height = window.innerHeight * pixelRatio;
+//         canvas.style.width = window.innerWidth + "px";
+//         canvas.style.height = window.innerHeight + "px";
+//         context.scale(pixelRatio, pixelRatio);
+//       };
+
+//       setCanvasSize();
+
+//       const frameCount = 300;
+//       const images: HTMLImageElement[] = [];
+//       let imagesToLoad = frameCount;
+
+//       const render = () => {
+//         context.clearRect(
+//           0,
+//           0,
+//           canvas.width / (window.devicePixelRatio || 1),
+//           canvas.height / (window.devicePixelRatio || 1)
+//         );
+//         const img = images[videoFramesRef.current.frame];
+//         if (img?.complete) {
+//           context.drawImage(img, 0, 0, window.innerWidth, window.innerHeight);
+//         }
+//       };
+
+//       // Load images
+//       for (let i = 0; i < frameCount; i++) {
+//         const img = new Image();
+//         img.src = `/frames/ezgif-frame-${(i + 1).toString().padStart(3, "0")}.jpg`;
+//         img.onload = () => {
+//           imagesToLoad--;
+//           if (imagesToLoad === 0) {
+//             render();
+//             ScrollTrigger.refresh();
+//           }
+//         };
+//         images.push(img);
+//       }
+
+//       // Scroll Animation
+//       const tl = gsap.timeline({
+//         scrollTrigger: {
+//           trigger: ".hero",
+//           start: "top top",
+//           end: `+=${window.innerHeight * 5}px`,
+//           pin: true,
+//           pinSpacing: true,
+//           scrub: 1,
+//         },
+//       });
+
+//       tl.to(
+//         videoFramesRef.current,
+//         {
+//           frame: frameCount - 1,
+//           snap: "frame",
+//           onUpdate: render,
+//           duration: 1,
+//           ease: "none",
+//         },
+//         0
+//       );
+
+//       // Text animations sequenced on the timeline
+//       tl.to(text1Ref.current, { opacity: 1, duration: 0.2 }, 0);
+//       tl.to(text1Ref.current, { opacity: 0, y: -50, duration: 0.2 }, 0.2);
+
+//       tl.fromTo(
+//         text2Ref.current,
+//         { y: 50 },
+//         { opacity: 1, y: 0, duration: 0.2 },
+//         0.3
+//       );
+//       tl.to(text2Ref.current, { opacity: 0, y: -50, duration: 0.2 }, 0.6);
+
+//       tl.fromTo(
+//         text3Ref.current,
+//         { y: 50 },
+//         { opacity: 1, y: 0, duration: 0.2 },
+//         0.7
+//       );
+//       tl.to(text3Ref.current, { opacity: 0, y: -50, duration: 0.2 }, 0.9);
+//     },
+//     { scope: containerRef }
+//   );
+
+//   return (
+//     <div ref={containerRef}>
+//       <section
+//         className="hero"
+//         style={{ position: "relative", width: "100%", height: "100vh" }}
+//       >
+//         <canvas
+//           ref={canvasRef}
+//           style={{ position: "absolute", top: 0, left: 0 }}
+//         ></canvas>
+
+//         <div
+//           style={{
+//             position: "absolute",
+//             top: "50%",
+//             left: "50%",
+//             width: "100%",
+//             maxWidth: "1400px",
+//             textAlign: "center",
+//             zIndex: 10,
+//             pointerEvents: "none",
+//           }}
+//         >
+//           <div
+//             ref={text1Ref}
+//             style={{ position: "absolute", top: 0,  width: "100%" }}
+//           >
+//             <h1 style={{ color: "#fff" }}>A New Standard in Living</h1>
+//           </div>
+//           <div
+//             ref={text2Ref}
+//             style={{ position: "absolute", top: 0,  width: "100%" }}
+//           >
+//             <h1 style={{ color: "#fff" }}>Discover Exceptional Properties</h1>
+//           </div>
+//           <div
+//             ref={text3Ref}
+//             style={{ position: "absolute", top: 0,  width: "100%" }}
+//           >
+//             <h1 style={{ color: "#fff" }}>Your Next Address Awaits</h1>
+//           </div>
+//         </div>
+//       </section>
+//     </div>
+//   );
+// }
