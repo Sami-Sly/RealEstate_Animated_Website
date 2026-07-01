@@ -399,10 +399,34 @@
 
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
+
+// If you're using Lenis for smooth scroll, this grabs whatever instance
+// you've stored globally (e.g. `window.__lenis = lenis` in your layout).
+// If you don't have Lenis wired up, these calls are just no-ops.
+declare global {
+  interface Window {
+    __lenis?: { stop: () => void; start: () => void };
+  }
+}
+
+const FRAME_COUNT = 300;
+const FRAME_PATH = (i: number) =>
+  `/frames/ezgif-frame-${(i + 1).toString().padStart(3, "0")}.jpg`; // <- switch to .webp once converted
+
+// How much of the sequence must be loaded before we unlock scroll.
+// 1 = wait for everything (safest, zero mid-scroll pop-in).
+// 0.9-0.95 = unlock slightly early, remaining frames trickle in via the
+// nearest-loaded-frame fallback (usually imperceptible).
+const READY_THRESHOLD = 0.95;
+
+// How many frames get fetchPriority="high" / load first. Keep this small —
+// it's just enough to make the loading screen feel like it's moving fast
+// and to guarantee frame 0 paints instantly.
+const PRIORITY_FRAMES = 24;
 
 export default function ScrollCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -419,6 +443,30 @@ export default function ScrollCanvas() {
     gsap.registerPlugin(ScrollTrigger, useGSAP);
   }
 
+  // --- Lock/unlock scroll while the overlay is up -------------------------
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    if (!isReady) {
+      const prevHtmlOverflow = html.style.overflow;
+      const prevBodyOverflow = body.style.overflow;
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      window.__lenis?.stop();
+
+      return () => {
+        html.style.overflow = prevHtmlOverflow;
+        body.style.overflow = prevBodyOverflow;
+      };
+    } else {
+      window.__lenis?.start();
+      // Force GSAP to recompute pin/start/end now that layout is final
+      // and scrolling is actually possible.
+      ScrollTrigger.refresh();
+    }
+  }, [isReady]);
+
   useGSAP(
     () => {
       const canvas = canvasRef.current;
@@ -434,37 +482,30 @@ export default function ScrollCanvas() {
       });
 
       const setCanvasSize = () => {
-        const pixelRatio = window.devicePixelRatio || 1;
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2); // cap DPR
         canvas.width = window.innerWidth * pixelRatio;
         canvas.height = window.innerHeight * pixelRatio;
         canvas.style.width = window.innerWidth + "px";
         canvas.style.height = window.innerHeight + "px";
-        // Reset transform before scaling so repeated resizes don't compound
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.scale(pixelRatio, pixelRatio);
       };
 
       setCanvasSize();
 
-      const frameCount = 300;
       const images: HTMLImageElement[] = [];
-      const loadedFlags: boolean[] = new Array(frameCount).fill(false);
+      const loadedFlags: boolean[] = new Array(FRAME_COUNT).fill(false);
       let loadedCount = 0;
-
-      // Tracks the last frame index we successfully drew, so if the
-      // "correct" frame for the current scroll position isn't loaded yet,
-      // we keep showing the closest available frame instead of a blank canvas.
       let lastDrawnFrame = -1;
+      let cancelled = false;
 
       const findNearestLoadedFrame = (target: number) => {
         if (loadedFlags[target]) return target;
-        // search backward first (more natural for a forward scroll),
-        // then forward, expanding outward
-        for (let offset = 1; offset < frameCount; offset++) {
+        for (let offset = 1; offset < FRAME_COUNT; offset++) {
           const back = target - offset;
           const fwd = target + offset;
           if (back >= 0 && loadedFlags[back]) return back;
-          if (fwd < frameCount && loadedFlags[fwd]) return fwd;
+          if (fwd < FRAME_COUNT && loadedFlags[fwd]) return fwd;
         }
         return -1;
       };
@@ -475,59 +516,83 @@ export default function ScrollCanvas() {
           ? target
           : findNearestLoadedFrame(target);
 
-        if (frameToDraw === -1) return; // nothing loaded yet, keep current canvas as-is
-        if (frameToDraw === lastDrawnFrame) return; // avoid redundant redraws
+        if (frameToDraw === -1) return;
+        if (frameToDraw === lastDrawnFrame) return;
 
         const img = images[frameToDraw];
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         context.clearRect(
           0,
           0,
-          canvas.width / (window.devicePixelRatio || 1),
-          canvas.height / (window.devicePixelRatio || 1)
+          canvas.width / pixelRatio,
+          canvas.height / pixelRatio
         );
         context.drawImage(img, 0, 0, window.innerWidth, window.innerHeight);
         lastDrawnFrame = frameToDraw;
       };
 
-      let cancelled = false;
+      const markLoaded = (i: number) => {
+        if (cancelled) return;
+        loadedFlags[i] = true;
+        loadedCount++;
 
-      for (let i = 0; i < frameCount; i++) {
+        if (i === 0) render();
+
+        const progress = loadedCount / FRAME_COUNT;
+        setLoadProgress(progress);
+
+        if (progress >= READY_THRESHOLD) {
+          setIsReady(true);
+        }
+
+        if (loadedCount === FRAME_COUNT) {
+          render();
+          ScrollTrigger.refresh();
+        }
+      };
+
+      // --- Load images: priority batch first, rest via idle callback ------
+      const loadImage = (i: number, priority: boolean) => {
         const img = new Image();
         img.decoding = "async";
-        img.src = `/frames/ezgif-frame-${(i + 1).toString().padStart(3, "0")}.jpg`;
-        img.onload = () => {
-          if (cancelled) return;
-          loadedFlags[i] = true;
-          loadedCount++;
-
-          if (i === 0) {
-            // draw the very first frame the moment it's available
-            render();
-          }
-
-          // Once enough of the sequence is in (or all of it), reveal the
-          // canvas and (re)compute ScrollTrigger's dimensions.
-          const progress = loadedCount / frameCount;
-          setLoadProgress(progress);
-
-          if (!isReady && (loadedCount === 1 || progress > 0.15)) {
-            setIsReady(true);
-          }
-
-          if (loadedCount === frameCount) {
-            render();
-            ScrollTrigger.refresh();
-          }
-        };
+        if (priority) {
+          // Chrome/Edge support fetchPriority on HTMLImageElement
+          (img as unknown as { fetchPriority?: string }).fetchPriority = "high";
+        }
+        img.src = FRAME_PATH(i);
+        img.onload = () => markLoaded(i);
         img.onerror = () => {
           loadedCount++; // don't block readiness forever on one bad frame
+          setLoadProgress(loadedCount / FRAME_COUNT);
         };
-        images.push(img);
+        images[i] = img;
+      };
+
+      for (let i = 0; i < Math.min(PRIORITY_FRAMES, FRAME_COUNT); i++) {
+        loadImage(i, true);
       }
+
+      const loadRemaining = () => {
+        let i = PRIORITY_FRAMES;
+        const chunk = () => {
+          if (cancelled) return;
+          const end = Math.min(i + 12, FRAME_COUNT); // small batches so we don't block the main thread
+          for (; i < end; i++) loadImage(i, false);
+          if (i < FRAME_COUNT) {
+            if ("requestIdleCallback" in window) {
+              (window as Window & { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(chunk);
+            } else {
+              setTimeout(chunk, 16);
+            }
+          }
+        };
+        chunk();
+      };
+      loadRemaining();
 
       const handleResize = () => {
         setCanvasSize();
-        lastDrawnFrame = -1; // force a redraw at the new size
+        lastDrawnFrame = -1;
         render();
       };
       window.addEventListener("resize", handleResize);
@@ -547,7 +612,7 @@ export default function ScrollCanvas() {
       tl.to(
         videoFramesRef.current,
         {
-          frame: frameCount - 1,
+          frame: FRAME_COUNT - 1,
           snap: "frame",
           onUpdate: render,
           duration: 1,
@@ -600,28 +665,6 @@ export default function ScrollCanvas() {
           }}
         ></canvas>
 
-        {/* Fallback background so there's never a black frame, even before
-            the first canvas frame has painted. Swap this for a static
-            first-frame poster image (e.g. /frames/ezgif-frame-001.jpg) if
-            you want an even smoother initial paint. */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "#0B0906",
-            opacity: isReady ? 0 : 1,
-            transition: "opacity 0.4s ease",
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            paddingBottom: "2rem",
-          }}
-        >
-          <div style={{ color: "#666", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
-            {Math.round(loadProgress * 100)}%
-          </div>
-        </div>
-
         <div
           style={{
             position: "absolute",
@@ -634,26 +677,62 @@ export default function ScrollCanvas() {
             pointerEvents: "none",
           }}
         >
-          <div
-            ref={text1Ref}
-            style={{ position: "absolute", top: 0, width: "100%" }}
-          >
+          <div ref={text1Ref} style={{ position: "absolute", top: 0, width: "100%" }}>
             <h1 style={{ color: "#fff" }}>A New Standard in Living</h1>
           </div>
-          <div
-            ref={text2Ref}
-            style={{ position: "absolute", top: 0, width: "100%" }}
-          >
+          <div ref={text2Ref} style={{ position: "absolute", top: 0, width: "100%" }}>
             <h1 style={{ color: "#fff" }}>Discover Exceptional Properties</h1>
           </div>
-          <div
-            ref={text3Ref}
-            style={{ position: "absolute", top: 0, width: "100%" }}
-          >
+          <div ref={text3Ref} style={{ position: "absolute", top: 0, width: "100%" }}>
             <h1 style={{ color: "#fff" }}>Your Next Address Awaits</h1>
           </div>
         </div>
       </section>
+
+      {/* Full-page loading overlay — sits above everything, blocks all
+          interaction (including scroll, via the effect above) until the
+          frame sequence is ready. */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          background: "#0B0906",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "1.5rem",
+          opacity: isReady ? 0 : 1,
+          pointerEvents: isReady ? "none" : "auto",
+          transition: "opacity 0.5s ease",
+        }}
+      >
+        <div
+          style={{
+            width: "180px",
+            height: "1px",
+            background: "rgba(255,255,255,0.15)",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              height: "100%",
+              width: `${Math.round(loadProgress * 100)}%`,
+              background: "#fff",
+              transition: "width 0.15s ease",
+            }}
+          />
+        </div>
+        <div style={{ color: "#999", fontSize: "0.75rem", letterSpacing: "0.1em" }}>
+          {Math.round(loadProgress * 100)}%
+        </div>
+      </div>
     </div>
   );
 }
