@@ -446,7 +446,7 @@ export default function ScrollCanvas() {
 
       setCanvasSize();
 
-      const frameCount = 240;
+      const frameCount = 300;
       const images: HTMLImageElement[] = [];
       const loadedFlags: boolean[] = new Array(frameCount).fill(false);
       let loadedCount = 0;
